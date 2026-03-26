@@ -1,0 +1,15 @@
+{
+  "name": "discord-bot",
+  "version": "1.0.0",
+  "description": "A Discord bot built with discord.js",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@google/genai": "^1.46.0",
+    "discord.js": "^14.19.3",
+    "dotenv": "^16.5.0"
+  }
+}
