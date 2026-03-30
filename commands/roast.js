@@ -133,7 +133,7 @@ const STYLE_PROMPTS = {
 Style: light teasing, playful, funny, not too harsh.
 
 Rules:
-- Write 4 to 6 medium-length sentences.
+- Roast must be between 50 and 100 words.
 - Make it witty and detailed.
 - No slurs.
 - No threats.
@@ -145,7 +145,7 @@ Rules:
 Style: savage, sharp, smug, group-chat roast energy.
 
 Rules:
-- Write 4 to 6 medium-length sentences.
+- Roast must be between 50 and 100 words.
 - Make it brutal, detailed, and creative.
 - No slurs.
 - No threats.
@@ -157,7 +157,7 @@ Rules:
 Style: nuclear meme roast, dramatic, chaotic, internet-heavy.
 
 Rules:
-- Write 4 to 6 medium-length sentences.
+- Roast must be between 50 and 100 words.
 - Make it hit hard with meme / internet energy.
 - No slurs.
 - No threats.
@@ -169,7 +169,7 @@ Rules:
 Style: unhinged, chaotic, absurdly overconfident, terminally online.
 
 Rules:
-- Write 4 to 6 medium-length sentences.
+- Roast must be between 50 and 100 words.
 - Make it wild, creative, and over-the-top.
 - No slurs.
 - No threats.
@@ -181,6 +181,11 @@ Rules:
 
 function normalizeStyle(style) {
   return ["soft", "savage", "nuclear", "unhinged"].includes(style) ? style : "savage";
+}
+
+function pickRandomStyle() {
+  const styles = ["soft", "savage", "nuclear", "unhinged"];
+  return styles[Math.floor(Math.random() * styles.length)];
 }
 
 function buildRoastPrompt(targetName, style = "savage") {
@@ -197,6 +202,7 @@ Output:
 - Just the roast.
 - No intro.
 - No explanation.
+- Keep it between 50 and 100 words.
 - Make each sentence feel different from the last.
 `;
 }
@@ -218,6 +224,7 @@ Output:
 - Just the comeback roast.
 - No intro.
 - No explanation.
+- Keep it between 50 and 100 words.
 - Make each sentence feel different from the last.
 - Use their own roast against them when possible.
 `;
@@ -227,7 +234,7 @@ async function generateRoast(targetName, style = "savage") {
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
     contents: buildRoastPrompt(targetName, style),
-    config: { maxOutputTokens: 700 },
+    config: { maxOutputTokens: 900 },
   });
 
   return response.text?.trim() || "Bro got roasted so hard the Wi-Fi lagged.";
@@ -237,7 +244,7 @@ async function generateComebackRoast(userName, userRoast, style = "savage") {
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
     contents: buildComebackPrompt(userName, userRoast, style),
-    config: { maxOutputTokens: 700 },
+    config: { maxOutputTokens: 900 },
   });
 
   return response.text?.trim() || "That roast was so weak it needed life support.";
@@ -340,12 +347,13 @@ module.exports = {
 
     const target = interaction.options.getUser("user");
     const targetName = target.globalName ?? target.username;
+    const style = pickRandomStyle();
 
     await interaction.deferReply();
     recordRoastUse(interaction.user.id, interaction.member);
 
     try {
-      const roast = await generateRoast(targetName, "savage");
+      const roast = await generateRoast(targetName, style);
       await interaction.editReply({
         content: `🔥 **Roasting ${target}...**\n\n${roast}`,
         components: [buildRoastBackButton()],
@@ -373,12 +381,13 @@ module.exports = {
     }
 
     const targetName = target.globalName ?? target.username;
+    const style = pickRandomStyle();
 
     const reply = await message.reply("🔥 Cooking up a roast...");
     recordRoastUse(message.author.id, message.member);
 
     try {
-      const roast = await generateRoast(targetName, "savage");
+      const roast = await generateRoast(targetName, style);
       await reply.edit({
         content: `🔥 **Roasting ${target}...**\n\n${roast}`,
         components: [buildRoastBackButton()],
