@@ -16,14 +16,14 @@ const ai = new GoogleGenAI({
 });
 
 const fallbackYaps = [
-  "I tried being productive today but my brain opened one tab, forgot the mission, and started free roaming like an NPC with no quest marker and zero survival instincts.",
-  "Some of y’all say 'quick question' and then drop a side quest so long it needs lore, three plot twists, and a post-credit scene before anyone understands the assignment.",
-  "I swear time moves differently when I’m doing something boring because five minutes feels like a whole documentary, but scrolling memes erases an hour like dark magic.",
-  "The wildest part of life is pretending we all know what we’re doing when half the population is just guessing confidently and hoping nobody asks follow-up questions.",
-  "Lowkey respect to people who wake up early, drink water, and have a plan because my morning routine is confusion, delayed reactions, and negotiating with my own existence.",
-  "If overthinking burned calories I’d be the strongest person alive because my brain turns one tiny awkward moment into a full cinematic universe with unnecessary sequels.",
-  "It’s honestly impressive how I can be tired before doing anything, hungry right after eating, and confused in conversations I personally started with full confidence and no backup plan.",
-  "Nobody talks enough about how mirrors just let us stare at ourselves for free like that isn’t one of the strangest features of reality ever casually accepted by society.",
+  "I tried being productive today but my brain opened one tab, forgot the mission, and started free roaming like an NPC with no quest marker and absolutely zero survival instincts.",
+  "Some of y’all say 'quick question' and then drop a side quest so long it needs lore, three plot twists, and a post-credit scene before anyone even understands the mission.",
+  "Time moves differently when I’m doing something boring because five minutes feels like a documentary, but scrolling memes deletes an hour like dark magic with no warning.",
+  "The funniest part of life is pretending everyone has a plan when half the population is just guessing confidently and hoping nobody asks one smart follow-up question.",
+  "Lowkey respect to people who wake up early, drink water, and have a clear plan because my morning routine is confusion, delayed reactions, and negotiating with my own existence.",
+  "If overthinking burned calories I’d be unstoppable because my brain can turn one tiny awkward moment into a full cinematic universe with sequels nobody asked for.",
+  "It’s impressive how I can be tired before doing anything, hungry right after eating, and confused in conversations I literally started with way too much confidence.",
+  "Nobody talks enough about how weird mirrors are because society just accepted free self-viewing portals and moved on like that isn’t one of the strangest things ever.",
 ];
 
 const fallbackRumors = [
@@ -134,7 +134,15 @@ async function generateDailyYaps(count) {
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
     contents: `
-Generate exactly ${count} separate chaotic, funny, chronically online Discord messages.
+Generate exactly ${count} separate Discord messages.
+
+Randomize the style across these categories:
+- funny
+- deep
+- chaotic
+- brainrot
+- shower-thought
+- terminally-online
 
 Rules:
 - each message should be around 25 to 35 words
@@ -144,8 +152,9 @@ Rules:
 - no intro text
 - one message per line only
 - casual Discord tone
-- make them varied and funny
+- make them very varied
 - do not repeat the same joke structure
+- mix the styles randomly
 `,
     config: { maxOutputTokens: 8192 },
   });
