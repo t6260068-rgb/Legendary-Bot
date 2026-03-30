@@ -31,7 +31,7 @@ for (const file of commandFiles) {
 
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`Logged in as ${readyClient.user.tag}`);
-  loopManager.init(client);
+  await loopManager.init(client);
 
   const rest = new REST().setToken(process.env.DISCORD_TOKEN);
   const commandData = [...client.commands.values()].map((cmd) => cmd.data.toJSON());
@@ -60,30 +60,49 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   if (interaction.isButton()) {
     if (interaction.customId === "roastback_open") {
-      const { buildRoastModal } = require("./commands/roast");
-      await interaction.showModal(buildRoastModal());
+      const { buildRoastBackStyleButtons } = require("./commands/roast");
+      await interaction.reply({
+        content: "🔥 Choose your roast-back style:",
+        components: [buildRoastBackStyleButtons()],
+        ephemeral: true,
+      });
+      return;
     }
+
+    if (interaction.customId.startsWith("roastback_style_")) {
+      const { buildRoastModal } = require("./commands/roast");
+      const style = interaction.customId.replace("roastback_style_", "");
+      await interaction.showModal(buildRoastModal(style));
+      return;
+    }
+
     return;
   }
 
   if (interaction.isModalSubmit()) {
-    if (interaction.customId === "roastback_modal") {
+    if (interaction.customId.startsWith("roastback_modal_")) {
       const { generateComebackRoast, buildRoastBackButton } = require("./commands/roast");
+
+      const style = interaction.customId.replace("roastback_modal_", "");
       const userRoast = interaction.fields.getTextInputValue("user_roast");
       const userName = interaction.member?.displayName ?? interaction.user.username;
 
       await interaction.deferReply();
+
       try {
-        const comeback = await generateComebackRoast(userName, userRoast);
+        const comeback = await generateComebackRoast(userName, userRoast, style);
         await interaction.editReply({
-          content: `🔥 **${interaction.user} said:** *"${userRoast}"*\n\n💀 **Bot fires back:**\n${comeback}`,
+          content: `🔥 **${interaction.user} said:** *"${userRoast}"*\n\n💀 **Bot fires back (${style}):**\n${comeback}`,
           components: [buildRoastBackButton()],
         });
       } catch (err) {
         console.error("Roast comeback error:", err);
         await interaction.editReply("❌ Couldn't cook up a comeback. Try again.");
       }
+
+      return;
     }
+
     return;
   }
 
@@ -110,7 +129,7 @@ client.on(Events.MessageCreate, async (message) => {
   if (!message.content.startsWith(PREFIX)) return;
 
   const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
-  const rawName = args.shift().toLowerCase();
+  const rawName = args.shift()?.toLowerCase();
   const commandName = ALIASES[rawName] ?? rawName;
 
   const command = client.commands.get(commandName);
@@ -120,7 +139,7 @@ client.on(Events.MessageCreate, async (message) => {
     await command.executePrefix(message, args);
   } catch (error) {
     console.error(`Error executing ${PREFIX}${commandName}:`, error);
-    message.reply("Something went wrong while running that command.");
+    await message.reply("Something went wrong while running that command.");
   }
 });
 
