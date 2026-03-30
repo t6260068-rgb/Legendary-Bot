@@ -13,6 +13,10 @@ const ai = new GoogleGenAI({
   apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
 });
 
+/* =======================
+   CONFIG
+======================= */
+
 function getConfig() {
   try {
     return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
@@ -25,33 +29,35 @@ function saveConfig(config) {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
 }
 
+/* =======================
+   AI GENERATORS
+======================= */
+
 async function generateYap() {
   const styles = [
     "Give an unhinged hot take no one asked for.",
-    "Share a wild shower thought that makes people question reality.",
-    "Drop an unpopular opinion confidently.",
-    "Say something totally random like you're terminally online.",
-    "Share a fun fact most people don't know.",
-    "Give a completely random observation about everyday life.",
-    "Say something that sounds deep but means absolutely nothing.",
-    "Give a chaotic take on food, sleep, or social media.",
+    "Share a wild shower thought.",
+    "Drop an unpopular opinion.",
+    "Say something totally random.",
+    "Share a weird fun fact.",
+    "Say something deep but meaningless.",
   ];
 
   const style = styles[Math.floor(Math.random() * styles.length)];
 
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
-    contents: `You are a chaotic, funny Discord bot. ${style} Under 180 characters. No hashtags.`,
+    contents: `You are a chaotic Discord bot. ${style} Under 180 characters.`,
     config: { maxOutputTokens: 8192 },
   });
 
-  return response.text?.trim() || "I had a thought but forgot it.";
+  return response.text?.trim() || "Brain lag. Try again later.";
 }
 
 async function generateRumorWithGif() {
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
-    contents: `Create a fake shocking rumor like a viral tweet. Under 260 chars. Then on NEW LINE write ONLY a 2-3 word gif search.`,
+    contents: `Create a fake viral rumor. Under 260 chars. Then NEW LINE with 2-3 word gif search.`,
     config: { maxOutputTokens: 8192 },
   });
 
@@ -80,7 +86,7 @@ async function generateRumorWithGif() {
 }
 
 /* =======================
-   🔥 FIXED RUN FUNCTIONS
+   LOOP RUNNERS (FIXED)
 ======================= */
 
 async function runYap(channelId) {
@@ -93,7 +99,14 @@ async function runYap(channelId) {
     const yap = await generateYap();
     await channel.send(`🗣️ ${yap}`);
   } catch (err) {
-    console.error("[Yap loop]", err.message);
+    const msg = err?.message || String(err);
+
+    if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED")) {
+      console.log("[Yap loop] Gemini quota hit, skipping...");
+      return;
+    }
+
+    console.error("[Yap loop]", msg);
   }
 }
 
@@ -116,7 +129,14 @@ async function runRumors(channelId) {
 
     await channel.send({ embeds: [embed] });
   } catch (err) {
-    console.error("[Rumors loop]", err.message);
+    const msg = err?.message || String(err);
+
+    if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED")) {
+      console.log("[Rumors loop] Gemini quota hit, skipping...");
+      return;
+    }
+
+    console.error("[Rumors loop]", msg);
   }
 }
 
