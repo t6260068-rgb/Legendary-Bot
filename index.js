@@ -60,7 +60,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   if (interaction.isButton()) {
     if (interaction.customId === "roastback_open") {
-      const { buildRoastBackStyleButtons } = require("./commands/roast");
+      const { buildRoastBackStyleButtons, getBlockedMessage } = require("./commands/roast");
+
+      const blocked = getBlockedMessage(interaction.user.id);
+      if (blocked) {
+        await interaction.reply({
+          content: blocked,
+          ephemeral: true,
+        });
+        return;
+      }
+
       await interaction.reply({
         content: "🔥 Choose your roast-back style:",
         components: [buildRoastBackStyleButtons()],
@@ -70,7 +80,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     if (interaction.customId.startsWith("roastback_style_")) {
-      const { buildRoastModal } = require("./commands/roast");
+      const { buildRoastModal, getBlockedMessage } = require("./commands/roast");
+
+      const blocked = getBlockedMessage(interaction.user.id);
+      if (blocked) {
+        await interaction.reply({
+          content: blocked,
+          ephemeral: true,
+        });
+        return;
+      }
+
       const style = interaction.customId.replace("roastback_style_", "");
       await interaction.showModal(buildRoastModal(style));
       return;
@@ -81,13 +101,28 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   if (interaction.isModalSubmit()) {
     if (interaction.customId.startsWith("roastback_modal_")) {
-      const { generateComebackRoast, buildRoastBackButton } = require("./commands/roast");
+      const {
+        generateComebackRoast,
+        buildRoastBackButton,
+        getBlockedMessage,
+        recordRoastUse,
+      } = require("./commands/roast");
+
+      const blocked = getBlockedMessage(interaction.user.id);
+      if (blocked) {
+        await interaction.reply({
+          content: blocked,
+          ephemeral: true,
+        });
+        return;
+      }
 
       const style = interaction.customId.replace("roastback_modal_", "");
       const userRoast = interaction.fields.getTextInputValue("user_roast");
       const userName = interaction.member?.displayName ?? interaction.user.username;
 
       await interaction.deferReply();
+      recordRoastUse(interaction.user.id);
 
       try {
         const comeback = await generateComebackRoast(userName, userRoast, style);
@@ -116,6 +151,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   } catch (error) {
     console.error(`Error executing /${interaction.commandName}:`, error);
     const msg = { content: "Something went wrong while running that command.", ephemeral: true };
+
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp(msg);
     } else {
