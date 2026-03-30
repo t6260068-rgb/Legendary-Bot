@@ -6,6 +6,7 @@ const {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
+  PermissionsBitField,
 } = require("discord.js");
 const { GoogleGenAI } = require("@google/genai");
 const fs = require("fs");
@@ -14,7 +15,7 @@ const path = require("path");
 const CONFIG_PATH = path.join(__dirname, "../data/roast-config.json");
 const USAGE_PATH = path.join(__dirname, "../data/roast-usage.json");
 
-const ROAST_COOLDOWN_MS = 30 * 1000; // 30 sec
+const ROAST_COOLDOWN_MS = 30 * 1000;
 const ROAST_DAILY_LIMIT = 10;
 
 function ensureJsonFile(filePath, defaultValue) {
@@ -52,23 +53,19 @@ function getTodayKey() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function getUserUsage(userId) {
-  const usage = getUsage();
-  const today = getTodayKey();
-
-  if (!usage[userId] || usage[userId].day !== today) {
-    usage[userId] = {
-      day: today,
-      count: 0,
-      lastUsedAt: 0,
-    };
-    saveUsage(usage);
-  }
-
-  return usage[userId];
+function isAdminLike(member) {
+  if (!member?.permissions) return false;
+  return (
+    member.permissions.has(PermissionsBitField.Flags.Administrator) ||
+    member.permissions.has(PermissionsBitField.Flags.ManageGuild)
+  );
 }
 
-function checkRoastAccess(userId) {
+function checkRoastAccess(userId, member) {
+  if (isAdminLike(member)) {
+    return { ok: true, bypass: true };
+  }
+
   const usage = getUsage();
   const today = getTodayKey();
 
@@ -104,7 +101,9 @@ function checkRoastAccess(userId) {
   return { ok: true };
 }
 
-function recordRoastUse(userId) {
+function recordRoastUse(userId, member) {
+  if (isAdminLike(member)) return;
+
   const usage = getUsage();
   const today = getTodayKey();
 
@@ -131,47 +130,51 @@ const ai = new GoogleGenAI({
 
 const STYLE_PROMPTS = {
   soft: `
-Style: light teasing, playful, friendly, still funny.
+Style: light teasing, playful, funny, not too harsh.
+
 Rules:
-- Keep it under 3 short sentences.
-- Make it witty, not too harsh.
+- Write 4 to 6 medium-length sentences.
+- Make it witty and detailed.
 - No slurs.
 - No threats.
 - No hate speech.
-- No overuse of words like "pathetic", "loser", "cringe".
-- Use light meme energy if it fits.
+- Do not overuse the same insult word.
+- Keep it playful and entertaining.
 `,
   savage: `
 Style: savage, sharp, smug, group-chat roast energy.
+
 Rules:
-- Keep it under 3 short sentences.
-- Be brutal but still playful-chaotic.
+- Write 4 to 6 medium-length sentences.
+- Make it brutal, detailed, and creative.
 - No slurs.
 - No threats.
 - No hate speech.
-- Do NOT overuse words like "pathetic", "loser", "cringe", "embarrassing".
+- Do NOT overuse words like "pathetic", "loser", "cringe", or "embarrassing".
 - Can use internet slang like "L", "cooked", "bro", "skill issue", "NPC", "touch grass".
 `,
   nuclear: `
 Style: nuclear meme roast, dramatic, chaotic, internet-heavy.
+
 Rules:
-- Keep it under 3 short sentences.
+- Write 4 to 6 medium-length sentences.
 - Make it hit hard with meme / internet energy.
 - No slurs.
 - No threats.
 - No hate speech.
-- Do NOT overuse words like "pathetic", "loser", "cringe", "embarrassing".
+- Do NOT overuse words like "pathetic", "loser", "cringe", or "embarrassing".
 - Can use slang like "L", "cooked", "delulu", "bro", "skill issue", "NPC", "touch grass", "SYBAU".
 `,
   unhinged: `
 Style: unhinged, chaotic, absurdly overconfident, terminally online.
+
 Rules:
-- Keep it under 3 short sentences.
-- Make it wild and creative.
+- Write 4 to 6 medium-length sentences.
+- Make it wild, creative, and over-the-top.
 - No slurs.
 - No threats.
 - No hate speech.
-- Do NOT overuse words like "pathetic", "loser", "cringe", "embarrassing".
+- Do NOT overuse words like "pathetic", "loser", "cringe", or "embarrassing".
 - Can use slang like "L", "cooked", "delulu", "bro", "skill issue", "NPC", "touch grass", "SYBAU".
 `,
 };
@@ -194,6 +197,7 @@ Output:
 - Just the roast.
 - No intro.
 - No explanation.
+- Make each sentence feel different from the last.
 `;
 }
 
@@ -214,6 +218,8 @@ Output:
 - Just the comeback roast.
 - No intro.
 - No explanation.
+- Make each sentence feel different from the last.
+- Use their own roast against them when possible.
 `;
 }
 
@@ -221,7 +227,7 @@ async function generateRoast(targetName, style = "savage") {
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
     contents: buildRoastPrompt(targetName, style),
-    config: { maxOutputTokens: 300 },
+    config: { maxOutputTokens: 700 },
   });
 
   return response.text?.trim() || "Bro got roasted so hard the Wi-Fi lagged.";
@@ -231,7 +237,7 @@ async function generateComebackRoast(userName, userRoast, style = "savage") {
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
     contents: buildComebackPrompt(userName, userRoast, style),
-    config: { maxOutputTokens: 300 },
+    config: { maxOutputTokens: 700 },
   });
 
   return response.text?.trim() || "That roast was so weak it needed life support.";
@@ -291,8 +297,8 @@ function getRoastChannel(guildId) {
   return config[guildId]?.roastChannel || null;
 }
 
-function getBlockedMessage(userId) {
-  const check = checkRoastAccess(userId);
+function getBlockedMessage(userId, member) {
+  const check = checkRoastAccess(userId, member);
 
   if (check.ok) return null;
 
@@ -324,7 +330,7 @@ module.exports = {
       });
     }
 
-    const blocked = getBlockedMessage(interaction.user.id);
+    const blocked = getBlockedMessage(interaction.user.id, interaction.member);
     if (blocked) {
       return interaction.reply({
         content: blocked,
@@ -336,7 +342,7 @@ module.exports = {
     const targetName = target.globalName ?? target.username;
 
     await interaction.deferReply();
-    recordRoastUse(interaction.user.id);
+    recordRoastUse(interaction.user.id, interaction.member);
 
     try {
       const roast = await generateRoast(targetName, "savage");
@@ -356,7 +362,7 @@ module.exports = {
       return message.reply(`❌ Roasts are only allowed in <#${roastChannel}>. Take it there! 🔥`);
     }
 
-    const blocked = getBlockedMessage(message.author.id);
+    const blocked = getBlockedMessage(message.author.id, message.member);
     if (blocked) {
       return message.reply(blocked);
     }
@@ -369,7 +375,7 @@ module.exports = {
     const targetName = target.globalName ?? target.username;
 
     const reply = await message.reply("🔥 Cooking up a roast...");
-    recordRoastUse(message.author.id);
+    recordRoastUse(message.author.id, message.member);
 
     try {
       const roast = await generateRoast(targetName, "savage");
