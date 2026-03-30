@@ -62,7 +62,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.customId === "roastback_open") {
       const { buildRoastBackStyleButtons, getBlockedMessage } = require("./commands/roast");
 
-      const blocked = getBlockedMessage(interaction.user.id);
+      const blocked = getBlockedMessage(interaction.user.id, interaction.member);
       if (blocked) {
         await interaction.reply({
           content: blocked,
@@ -82,7 +82,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.customId.startsWith("roastback_style_")) {
       const { buildRoastModal, getBlockedMessage } = require("./commands/roast");
 
-      const blocked = getBlockedMessage(interaction.user.id);
+      const blocked = getBlockedMessage(interaction.user.id, interaction.member);
       if (blocked) {
         await interaction.reply({
           content: blocked,
@@ -108,7 +108,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         recordRoastUse,
       } = require("./commands/roast");
 
-      const blocked = getBlockedMessage(interaction.user.id);
+      const blocked = getBlockedMessage(interaction.user.id, interaction.member);
       if (blocked) {
         await interaction.reply({
           content: blocked,
@@ -122,7 +122,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const userName = interaction.member?.displayName ?? interaction.user.username;
 
       await interaction.deferReply();
-      recordRoastUse(interaction.user.id);
+      recordRoastUse(interaction.user.id, interaction.member);
 
       try {
         const comeback = await generateComebackRoast(userName, userRoast, style);
