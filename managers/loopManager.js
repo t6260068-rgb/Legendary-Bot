@@ -71,17 +71,28 @@ async function generateRumorWithGif() {
   return { text: rumorText, gifUrl };
 }
 
-async function runYap(channelId) {
+async function runRumors(channelId) {
   try {
+    console.log(`[RUMOR SENT] ${new Date().toISOString()}`); // 👈 ADD HERE
+
     const channel = await _client.channels.fetch(channelId).catch(() => null);
     if (!channel) return;
-    const yap = await generateYap();
-    await channel.send(`🗣️ ${yap}`);
+
+    const { text, gifUrl } = await generateRumorWithGif();
+
+    const embed = new EmbedBuilder()
+      .setColor(0xff6b35)
+      .setDescription(text)
+      .setFooter({ text: "📱 Trending on social media..." })
+      .setTimestamp();
+
+    if (gifUrl) embed.setImage(gifUrl);
+
+    await channel.send({ embeds: [embed] });
   } catch (err) {
-    console.error("[Yap loop]", err.message);
+    console.error("[Rumors loop]", err.message);
   }
 }
-
 async function runRumors(channelId) {
   try {
     const channel = await _client.channels.fetch(channelId).catch(() => null);
