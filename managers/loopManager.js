@@ -73,13 +73,12 @@ async function generateRumorWithGif() {
 
 async function runRumors(channelId) {
   try {
-    console.log(`[RUMOR SENT] ${new Date().toISOString()}`); // 👈 ADD HERE
+    console.log(`[RUMOR SENT] ${new Date().toISOString()}`);
 
     const channel = await _client.channels.fetch(channelId).catch(() => null);
     if (!channel) return;
 
     const { text, gifUrl } = await generateRumorWithGif();
-
     const embed = new EmbedBuilder()
       .setColor(0xff6b35)
       .setDescription(text)
@@ -87,7 +86,6 @@ async function runRumors(channelId) {
       .setTimestamp();
 
     if (gifUrl) embed.setImage(gifUrl);
-
     await channel.send({ embeds: [embed] });
   } catch (err) {
     console.error("[Rumors loop]", err.message);
