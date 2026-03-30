@@ -204,6 +204,8 @@ Output:
 - No explanation.
 - Keep it between 50 and 100 words.
 - Make each sentence feel different from the last.
+- End with a complete final sentence.
+- Never cut off mid-sentence.
 `;
 }
 
@@ -227,6 +229,8 @@ Output:
 - Keep it between 50 and 100 words.
 - Make each sentence feel different from the last.
 - Use their own roast against them when possible.
+- End with a complete final sentence.
+- Never cut off mid-sentence.
 `;
 }
 
@@ -234,7 +238,7 @@ async function generateRoast(targetName, style = "savage") {
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
     contents: buildRoastPrompt(targetName, style),
-    config: { maxOutputTokens: 900 },
+    config: { maxOutputTokens: 1200 },
   });
 
   return response.text?.trim() || "Bro got roasted so hard the Wi-Fi lagged.";
@@ -244,7 +248,7 @@ async function generateComebackRoast(userName, userRoast, style = "savage") {
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
     contents: buildComebackPrompt(userName, userRoast, style),
-    config: { maxOutputTokens: 900 },
+    config: { maxOutputTokens: 1200 },
   });
 
   return response.text?.trim() || "That roast was so weak it needed life support.";
