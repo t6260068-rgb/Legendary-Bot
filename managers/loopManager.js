@@ -4,7 +4,9 @@ const fs = require("fs");
 const path = require("path");
 
 const CONFIG_PATH = path.join(__dirname, "../data/loops-config.json");
+const CACHE_PATH = path.join(__dirname, "../data/ai-cache.json");
 const TENOR_KEY = "LIVDSRZULELA";
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 const activeIntervals = {};
 let _client = null;
@@ -13,35 +15,35 @@ const ai = new GoogleGenAI({
   apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
 });
 
-// =======================
-// QUEUES + FALLBACKS
-// =======================
-
-const yapQueue = [];
-const rumorQueue = [];
-
 const fallbackYaps = [
-  "I was gonna say something deep but I forgot halfway through.",
-  "Sleep is just a free trial of being dead but less dramatic.",
-  "Why is it always one sock that disappears? Where are they going?",
-  "Water has no taste but somehow still slaps at 3 AM.",
-  "Nobody talks about how weird it is that mirrors just exist.",
-  "If tomatoes are fruit then ketchup is technically a smoothie.",
+  "I was gonna say something deep but my brain clocked out early.",
+  "Sleep is just loading screen for tomorrow’s chaos.",
+  "Lowkey everything is fake but snacks are real.",
+  "I had a thought and then immediately lost the plot.",
+  "Why does 5 minutes feel like 2 hours in class but 2 minutes on my phone feels illegal?",
+  "Some of y’all type 'bro' like it’s punctuation.",
+  "Imagine being productive on purpose. Wild concept.",
+  "I respect people who know what they’re doing because I definitely don’t.",
 ];
 
 const fallbackRumors = [
-  "🚨 BREAKING: A celebrity was spotted arguing with a self-checkout machine. Source: a guy named Kevin.",
-  "😱 Rumor has it a tech CEO rage quit their own app after forgetting their password. Source: trust me bro.",
-  "🔥 A sports star allegedly blamed Mercury retrograde for missing practice. Source: my cousin's barber.",
-  "👀 Reports say an influencer cried because their iced coffee had too much ice. Source: leaked vibes.",
-  "🚨 A famous singer supposedly ghosted their group chat for 3 months then came back with 'my bad'. Source: a suspicious tweet.",
+  { text: "🚨 BREAKING: A celebrity allegedly got into an argument with a self-checkout machine. Source: my cousin’s friend.", gifQuery: "shocked reaction" },
+  { text: "😱 Rumor says a tech CEO forgot their own password and blamed the interns. Source: an extremely dramatic tweet.", gifQuery: "facepalm reaction" },
+  { text: "🔥 Reports claim a singer left the group chat for 3 months and returned with just 'my bad'. Source: trust me bro.", gifQuery: "awkward reaction" },
+  { text: "👀 A sports star was apparently late to practice because they were rewatching their own highlights. Source: vibes.", gifQuery: "mind blown" },
+  { text: "🚨 Allegedly, an influencer cried because their iced coffee had too much ice. Source: social media detectives.", gifQuery: "dramatic crying" },
 ];
 
-// =======================
-// CONFIG
-// =======================
+function ensureJsonFile(filePath, defaultValue) {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  if (!fs.existsSync(filePath)) {
+    fs.writeFileSync(filePath, JSON.stringify(defaultValue, null, 2));
+  }
+}
 
 function getConfig() {
+  ensureJsonFile(CONFIG_PATH, {});
   try {
     return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
   } catch {
@@ -50,22 +52,71 @@ function getConfig() {
 }
 
 function saveConfig(config) {
+  ensureJsonFile(CONFIG_PATH, {});
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
 }
 
-// =======================
-// AI HELPERS
-// =======================
+function getCache() {
+  ensureJsonFile(CACHE_PATH, {
+    dateKey: null,
+    yaps: [],
+    rumors: [],
+  });
+
+  try {
+    return JSON.parse(fs.readFileSync(CACHE_PATH, "utf8"));
+  } catch {
+    return {
+      dateKey: null,
+      yaps: [],
+      rumors: [],
+    };
+  }
+}
+
+function saveCache(cache) {
+  ensureJsonFile(CACHE_PATH, {
+    dateKey: null,
+    yaps: [],
+    rumors: [],
+  });
+  fs.writeFileSync(CACHE_PATH, JSON.stringify(cache, null, 2));
+}
+
+function getTodayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 function isQuotaError(err) {
   const msg = err?.message || String(err);
   return msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED");
 }
 
+function calculateDailyNeeds() {
+  const config = getConfig();
+  let yapCount = 0;
+  let rumorCount = 0;
+
+  for (const loops of Object.values(config)) {
+    if (loops.yap?.active && loops.yap.intervalMs) {
+      yapCount += Math.ceil(ONE_DAY_MS / Number(loops.yap.intervalMs));
+    }
+
+    if (loops.rumors?.active && loops.rumors.intervalMs) {
+      rumorCount += Math.ceil(ONE_DAY_MS / Number(loops.rumors.intervalMs));
+    }
+  }
+
+  return {
+    yapCount: Math.max(yapCount, 8),
+    rumorCount: Math.max(rumorCount, 6),
+  };
+}
+
 async function fetchGifUrl(gifQuery) {
   try {
     const res = await fetch(
-      `https://g.tenor.com/v1/search?q=${encodeURIComponent(gifQuery)}&key=${TENOR_KEY}&limit=20`
+      `https://g.tenor.com/v1/search?q=${encodeURIComponent(gifQuery)}&key=${TENOR_KEY}&limit=20&contentfilter=medium`
     );
     const data = await res.json();
     const results = data.results || [];
@@ -79,109 +130,144 @@ async function fetchGifUrl(gifQuery) {
   }
 }
 
-// =======================
-// BATCH GENERATION
-// =======================
+async function generateDailyYaps(count) {
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: `
+Generate exactly ${count} separate chaotic, funny, chronically online Discord messages.
 
-async function refillYapQueue() {
-  if (yapQueue.length >= 3) return;
-
-  try {
-    console.log("[YAP QUEUE] Refilling...");
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: `
-Generate 8 separate chaotic, funny, chronically online Discord messages.
 Rules:
-- each one must be under 180 characters
+- each message must be under 180 characters
 - no hashtags
 - no numbering
 - no intro text
-- one message per line
-- casual tone
+- one message per line only
+- casual Discord tone
+- make them varied
 `,
-      config: { maxOutputTokens: 8192 },
-    });
+    config: { maxOutputTokens: 8192 },
+  });
 
-    const raw = response.text?.trim() || "";
-    const items = raw
-      .split("\n")
-      .map((x) => x.trim())
-      .filter(Boolean)
-      .filter((x) => x.length <= 180);
-
-    if (items.length) {
-      yapQueue.push(...items);
-      console.log(`[YAP QUEUE] Added ${items.length} items`);
-    }
-  } catch (err) {
-    if (isQuotaError(err)) {
-      console.log("[YAP QUEUE] Gemini quota hit, using fallback queue.");
-      yapQueue.push(...fallbackYaps);
-      return;
-    }
-
-    console.error("[YAP QUEUE]", err?.message || String(err));
-  }
+  const raw = response.text?.trim() || "";
+  return raw
+    .split("\n")
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .slice(0, count);
 }
 
-async function refillRumorQueue() {
-  if (rumorQueue.length >= 2) return;
+async function generateDailyRumors(count) {
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: `
+Generate exactly ${count} fake viral rumors.
 
-  try {
-    console.log("[RUMOR QUEUE] Refilling...");
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: `
-Generate 5 fake shocking viral rumors.
 Rules:
-- each rumor must be under 260 characters
+- each rumor under 260 characters
 - each rumor should sound like social media drama
 - after each rumor, add " || " and then a 2-3 word gif search
-- one rumor per line
+- one rumor per line only
 - no numbering
 `,
-      config: { maxOutputTokens: 8192 },
+    config: { maxOutputTokens: 8192 },
+  });
+
+  const raw = response.text?.trim() || "";
+  return raw
+    .split("\n")
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .slice(0, count)
+    .map((line) => {
+      const [text, gifQuery] = line.split("||").map((x) => x?.trim());
+      return {
+        text: text || "🚨 BREAKING: Nothing happened. Source: vibes.",
+        gifQuery: gifQuery || "shocked reaction",
+      };
     });
-
-    const raw = response.text?.trim() || "";
-    const items = raw
-      .split("\n")
-      .map((x) => x.trim())
-      .filter(Boolean)
-      .map((line) => {
-        const [text, gifQuery] = line.split("||").map((x) => x?.trim());
-        return {
-          text: text || "BREAKING: nothing happened again.",
-          gifQuery: gifQuery || "shocked face",
-        };
-      });
-
-    if (items.length) {
-      rumorQueue.push(...items);
-      console.log(`[RUMOR QUEUE] Added ${items.length} items`);
-    }
-  } catch (err) {
-    if (isQuotaError(err)) {
-      console.log("[RUMOR QUEUE] Gemini quota hit, using fallback queue.");
-      rumorQueue.push(
-        ...fallbackRumors.map((text) => ({
-          text,
-          gifQuery: "shocked face",
-        }))
-      );
-      return;
-    }
-
-    console.error("[RUMOR QUEUE]", err?.message || String(err));
-  }
 }
 
-// =======================
-// LOOP RUNNERS
-// =======================
+async function ensureDailyCache() {
+  const cache = getCache();
+  const todayKey = getTodayKey();
+  const { yapCount, rumorCount } = calculateDailyNeeds();
+
+  let changed = false;
+
+  if (cache.dateKey !== todayKey) {
+    cache.dateKey = todayKey;
+    cache.yaps = [];
+    cache.rumors = [];
+    changed = true;
+  }
+
+  if (cache.yaps.length < yapCount) {
+    try {
+      console.log(`[CACHE] Generating ${yapCount} yaps for today...`);
+      cache.yaps = await generateDailyYaps(yapCount);
+      changed = true;
+    } catch (err) {
+      if (isQuotaError(err)) {
+        console.log("[CACHE] Yap Gemini quota hit, using fallback yaps.");
+        while (cache.yaps.length < yapCount) {
+          cache.yaps.push(...fallbackYaps);
+        }
+        cache.yaps = cache.yaps.slice(0, yapCount);
+        changed = true;
+      } else {
+        console.error("[CACHE] Yap generation error:", err?.message || String(err));
+      }
+    }
+  }
+
+  if (cache.rumors.length < rumorCount) {
+    try {
+      console.log(`[CACHE] Generating ${rumorCount} rumors for today...`);
+      cache.rumors = await generateDailyRumors(rumorCount);
+      changed = true;
+    } catch (err) {
+      if (isQuotaError(err)) {
+        console.log("[CACHE] Rumor Gemini quota hit, using fallback rumors.");
+        while (cache.rumors.length < rumorCount) {
+          cache.rumors.push(...fallbackRumors);
+        }
+        cache.rumors = cache.rumors.slice(0, rumorCount);
+        changed = true;
+      } else {
+        console.error("[CACHE] Rumor generation error:", err?.message || String(err));
+      }
+    }
+  }
+
+  if (changed) saveCache(cache);
+}
+
+async function takeNextYap() {
+  const cache = getCache();
+  if (!cache.yaps.length) {
+    await ensureDailyCache();
+  }
+
+  const updated = getCache();
+  const yap = updated.yaps.shift() || fallbackYaps[Math.floor(Math.random() * fallbackYaps.length)];
+  saveCache(updated);
+  return yap;
+}
+
+async function takeNextRumor() {
+  const cache = getCache();
+  if (!cache.rumors.length) {
+    await ensureDailyCache();
+  }
+
+  const updated = getCache();
+  const rumor =
+    updated.rumors.shift() ||
+    fallbackRumors[Math.floor(Math.random() * fallbackRumors.length)];
+
+  saveCache(updated);
+  return rumor;
+}
 
 async function runYap(channelId) {
   try {
@@ -190,26 +276,10 @@ async function runYap(channelId) {
     const channel = await _client.channels.fetch(channelId).catch(() => null);
     if (!channel) return;
 
-    if (yapQueue.length === 0) {
-      await refillYapQueue();
-    }
-
-    const yap = yapQueue.shift() || fallbackYaps[Math.floor(Math.random() * fallbackYaps.length)];
+    const yap = await takeNextYap();
     await channel.send(`🗣️ ${yap}`);
-
-    // refill in background if queue is low
-    if (yapQueue.length < 2) {
-      refillYapQueue().catch(() => {});
-    }
   } catch (err) {
-    const msg = err?.message || String(err);
-
-    if (isQuotaError(err)) {
-      console.log("[Yap loop] Gemini quota hit, skipping...");
-      return;
-    }
-
-    console.error("[Yap loop]", msg);
+    console.error("[Yap loop]", err?.message || String(err));
   }
 }
 
@@ -220,16 +290,7 @@ async function runRumors(channelId) {
     const channel = await _client.channels.fetch(channelId).catch(() => null);
     if (!channel) return;
 
-    if (rumorQueue.length === 0) {
-      await refillRumorQueue();
-    }
-
-    const item =
-      rumorQueue.shift() || {
-        text: fallbackRumors[Math.floor(Math.random() * fallbackRumors.length)],
-        gifQuery: "shocked face",
-      };
-
+    const item = await takeNextRumor();
     const gifUrl = await fetchGifUrl(item.gifQuery);
 
     const embed = new EmbedBuilder()
@@ -241,26 +302,10 @@ async function runRumors(channelId) {
     if (gifUrl) embed.setImage(gifUrl);
 
     await channel.send({ embeds: [embed] });
-
-    // refill in background if queue is low
-    if (rumorQueue.length < 2) {
-      refillRumorQueue().catch(() => {});
-    }
   } catch (err) {
-    const msg = err?.message || String(err);
-
-    if (isQuotaError(err)) {
-      console.log("[Rumors loop] Gemini quota hit, skipping...");
-      return;
-    }
-
-    console.error("[Rumors loop]", msg);
+    console.error("[Rumors loop]", err?.message || String(err));
   }
 }
-
-// =======================
-// LOOP SYSTEM
-// =======================
 
 function startLoop(guildId, type, channelId, intervalMs) {
   stopLoop(guildId, type);
@@ -306,6 +351,7 @@ function setLoop(guildId, type, channelId, intervalMs) {
   };
 
   saveConfig(config);
+  ensureDailyCache().catch(() => {});
   startLoop(guildId, type, channelId, Number(intervalMs));
 }
 
@@ -339,11 +385,7 @@ function restoreLoops() {
 
 async function init(client) {
   _client = client;
-
-  // warm queues a little on startup
-  refillYapQueue().catch(() => {});
-  refillRumorQueue().catch(() => {});
-
+  await ensureDailyCache();
   restoreLoops();
 }
 
