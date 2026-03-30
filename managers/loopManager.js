@@ -14,8 +14,11 @@ const ai = new GoogleGenAI({
 });
 
 function getConfig() {
-  try { return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")); }
-  catch { return {}; }
+  try {
+    return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
+  } catch {
+    return {};
+  }
 }
 
 function saveConfig(config) {
@@ -33,42 +36,65 @@ async function generateYap() {
     "Say something that sounds deep but means absolutely nothing.",
     "Give a chaotic take on food, sleep, or social media.",
   ];
+
   const style = styles[Math.floor(Math.random() * styles.length)];
 
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
-    contents: `You are a chaotic, funny, chronically online Discord bot. ${style} Under 180 characters. No hashtags. Very casual tone. Just say the thing directly, no intro.`,
+    contents: `You are a chaotic, funny Discord bot. ${style} Under 180 characters. No hashtags.`,
     config: { maxOutputTokens: 8192 },
   });
-  return response.text?.trim() || "I had a thought but I forgot it. Probably wasn't important.";
+
+  return response.text?.trim() || "I had a thought but forgot it.";
 }
 
 async function generateRumorWithGif() {
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
-    contents: `Create a fake shocking social media rumor about a celebrity, tech company, sports star, or entertainment. Format it like a viral tweet with emojis and urgency. Include a fake "Source:" at the end. Keep it under 260 characters. Then on a NEW LINE write ONLY a 2-3 word gif search term that matches the vibe (e.g. "mind blown" or "shocked reaction" or "oh no").`,
+    contents: `Create a fake shocking rumor like a viral tweet. Under 260 chars. Then on NEW LINE write ONLY a 2-3 word gif search.`,
     config: { maxOutputTokens: 8192 },
   });
 
-  const raw = response.text?.trim() || "BREAKING: Nothing happened. Source: Trust me bro\nshocked face";
+  const raw = response.text?.trim() || "BREAKING: nothing happened\nshocked face";
   const lines = raw.split("\n").map(l => l.trim()).filter(Boolean);
+
   const gifQuery = lines[lines.length - 1];
   const rumorText = lines.slice(0, -1).join("\n");
 
   let gifUrl = null;
+
   try {
-    const gifRes = await fetch(
-      `https://g.tenor.com/v1/search?q=${encodeURIComponent(gifQuery)}&key=${TENOR_KEY}&limit=20&contentfilter=medium`
+    const res = await fetch(
+      `https://g.tenor.com/v1/search?q=${encodeURIComponent(gifQuery)}&key=${TENOR_KEY}&limit=20`
     );
-    const gifData = await gifRes.json();
-    const results = gifData.results || [];
+    const data = await res.json();
+    const results = data.results || [];
+
     if (results.length) {
       const pick = results[Math.floor(Math.random() * results.length)];
-      gifUrl = pick.media?.[0]?.gif?.url || pick.media?.[0]?.mediumgif?.url || null;
+      gifUrl = pick.media?.[0]?.gif?.url || null;
     }
-  } catch { /* no gif is fine */ }
+  } catch {}
 
   return { text: rumorText, gifUrl };
+}
+
+/* =======================
+   🔥 FIXED RUN FUNCTIONS
+======================= */
+
+async function runYap(channelId) {
+  try {
+    console.log(`[YAP SENT] ${new Date().toISOString()}`);
+
+    const channel = await _client.channels.fetch(channelId).catch(() => null);
+    if (!channel) return;
+
+    const yap = await generateYap();
+    await channel.send(`🗣️ ${yap}`);
+  } catch (err) {
+    console.error("[Yap loop]", err.message);
+  }
 }
 
 async function runRumors(channelId) {
@@ -79,44 +105,46 @@ async function runRumors(channelId) {
     if (!channel) return;
 
     const { text, gifUrl } = await generateRumorWithGif();
+
     const embed = new EmbedBuilder()
       .setColor(0xff6b35)
       .setDescription(text)
-      .setFooter({ text: "📱 Trending on social media..." })
+      .setFooter({ text: "📱 Trending..." })
       .setTimestamp();
 
     if (gifUrl) embed.setImage(gifUrl);
+
     await channel.send({ embeds: [embed] });
   } catch (err) {
     console.error("[Rumors loop]", err.message);
   }
 }
-async function runRumors(channelId) {
-  try {
-    const channel = await _client.channels.fetch(channelId).catch(() => null);
-    if (!channel) return;
-    const { text, gifUrl } = await generateRumorWithGif();
-    const embed = new EmbedBuilder()
-      .setColor(0xff6b35)
-      .setDescription(text)
-      .setFooter({ text: "📱 Trending on social media..." })
-      .setTimestamp();
-    if (gifUrl) embed.setImage(gifUrl);
-    await channel.send({ embeds: [embed] });
-  } catch (err) {
-    console.error("[Rumors loop]", err.message);
-  }
-}
+
+/* =======================
+   LOOP SYSTEM
+======================= */
 
 function startLoop(guildId, type, channelId, intervalMs) {
   stopLoop(guildId, type);
+
   if (!activeIntervals[guildId]) activeIntervals[guildId] = {};
-  const runners = { yap: runYap, rumors: runRumors };
+
+  const runners = {
+    yap: runYap,
+    rumors: runRumors,
+  };
+
   const runner = runners[type];
   if (!runner) return;
 
+  console.log(`[START LOOP] ${type} every ${intervalMs}ms`);
+
   runner(channelId);
-  activeIntervals[guildId][type] = setInterval(() => runner(channelId), intervalMs);
+
+  activeIntervals[guildId][type] = setInterval(() => {
+    console.log(`[LOOP TRIGGER] ${type}`);
+    runner(channelId);
+  }, intervalMs);
 }
 
 function stopLoop(guildId, type) {
@@ -128,18 +156,27 @@ function stopLoop(guildId, type) {
 
 function setLoop(guildId, type, channelId, intervalMs) {
   const config = getConfig();
+
   if (!config[guildId]) config[guildId] = {};
-  config[guildId][type] = { channelId, intervalMs, active: true };
+
+  config[guildId][type] = {
+    channelId,
+    intervalMs,
+    active: true,
+  };
+
   saveConfig(config);
   startLoop(guildId, type, channelId, intervalMs);
 }
 
 function clearLoop(guildId, type) {
   const config = getConfig();
+
   if (config[guildId]?.[type]) {
     config[guildId][type].active = false;
     saveConfig(config);
   }
+
   stopLoop(guildId, type);
 }
 
@@ -149,19 +186,25 @@ function getStatus(guildId, type) {
 
 function restoreLoops() {
   const config = getConfig();
+
   for (const [guildId, loops] of Object.entries(config)) {
     for (const [type, loopConfig] of Object.entries(loops)) {
       if (loopConfig.active) {
-        console.log(`[LoopManager] Restoring ${type} loop for guild ${guildId}`);
+        console.log(`[RESTORE] ${type} loop`);
         startLoop(guildId, type, loopConfig.channelId, loopConfig.intervalMs);
       }
     }
   }
 }
 
-function init(discordClient) {
-  _client = discordClient;
+function init(client) {
+  _client = client;
   restoreLoops();
 }
 
-module.exports = { init, setLoop, clearLoop, getStatus };
+module.exports = {
+  init,
+  setLoop,
+  clearLoop,
+  getStatus,
+};
