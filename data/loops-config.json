@@ -7,7 +7,7 @@
     },
     "yap": {
       "channelId": "1448911339849515109",
-      "intervalMs": 1800000,
+      "intervalMs": 3600000,
       "active": true
     }
   }
