@@ -16,22 +16,22 @@ const ai = new GoogleGenAI({
 });
 
 const fallbackYaps = [
-  "I was gonna say something deep but my brain clocked out early.",
-  "Sleep is just loading screen for tomorrow’s chaos.",
-  "Lowkey everything is fake but snacks are real.",
-  "I had a thought and then immediately lost the plot.",
-  "Why does 5 minutes feel like 2 hours in class but 2 minutes on my phone feels illegal?",
-  "Some of y’all type 'bro' like it’s punctuation.",
-  "Imagine being productive on purpose. Wild concept.",
-  "I respect people who know what they’re doing because I definitely don’t.",
+  "I tried being productive today but my brain opened one tab, forgot the mission, and started free roaming like an NPC with no quest marker and zero survival instincts.",
+  "Some of y’all say 'quick question' and then drop a side quest so long it needs lore, three plot twists, and a post-credit scene before anyone understands the assignment.",
+  "I swear time moves differently when I’m doing something boring because five minutes feels like a whole documentary, but scrolling memes erases an hour like dark magic.",
+  "The wildest part of life is pretending we all know what we’re doing when half the population is just guessing confidently and hoping nobody asks follow-up questions.",
+  "Lowkey respect to people who wake up early, drink water, and have a plan because my morning routine is confusion, delayed reactions, and negotiating with my own existence.",
+  "If overthinking burned calories I’d be the strongest person alive because my brain turns one tiny awkward moment into a full cinematic universe with unnecessary sequels.",
+  "It’s honestly impressive how I can be tired before doing anything, hungry right after eating, and confused in conversations I personally started with full confidence and no backup plan.",
+  "Nobody talks enough about how mirrors just let us stare at ourselves for free like that isn’t one of the strangest features of reality ever casually accepted by society.",
 ];
 
 const fallbackRumors = [
-  { text: "🚨 BREAKING: A celebrity allegedly got into an argument with a self-checkout machine. Source: my cousin’s friend.", gifQuery: "shocked reaction" },
-  { text: "😱 Rumor says a tech CEO forgot their own password and blamed the interns. Source: an extremely dramatic tweet.", gifQuery: "facepalm reaction" },
-  { text: "🔥 Reports claim a singer left the group chat for 3 months and returned with just 'my bad'. Source: trust me bro.", gifQuery: "awkward reaction" },
-  { text: "👀 A sports star was apparently late to practice because they were rewatching their own highlights. Source: vibes.", gifQuery: "mind blown" },
-  { text: "🚨 Allegedly, an influencer cried because their iced coffee had too much ice. Source: social media detectives.", gifQuery: "dramatic crying" },
+  { text: "🚨 BREAKING: A celebrity allegedly got into an argument with a self-checkout machine after it rejected the same avocado three times. Source: my cousin’s friend.", gifQuery: "shocked reaction" },
+  { text: "😱 Rumor says a tech CEO forgot their own password, blamed the interns, then posted a motivational thread about leadership 10 minutes later. Source: an extremely dramatic tweet.", gifQuery: "facepalm reaction" },
+  { text: "🔥 Reports claim a singer vanished from the group chat for 3 months, returned with 'my bad,' and immediately asked who touched their charger. Source: trust me bro.", gifQuery: "awkward reaction" },
+  { text: "👀 A sports star was apparently late to practice because they were rewatching their own highlights and calling it film study. Source: suspiciously confident vibes.", gifQuery: "mind blown" },
+  { text: "🚨 Allegedly, an influencer cried because their iced coffee had too much ice, then called it emotional sabotage in a 7-part story. Source: social media detectives.", gifQuery: "dramatic crying" },
 ];
 
 function ensureJsonFile(filePath, defaultValue) {
@@ -137,13 +137,15 @@ async function generateDailyYaps(count) {
 Generate exactly ${count} separate chaotic, funny, chronically online Discord messages.
 
 Rules:
-- each message must be under 180 characters
+- each message should be around 25 to 35 words
+- each message must stay under 240 characters if possible
 - no hashtags
 - no numbering
 - no intro text
 - one message per line only
 - casual Discord tone
-- make them varied
+- make them varied and funny
+- do not repeat the same joke structure
 `,
     config: { maxOutputTokens: 8192 },
   });
@@ -227,7 +229,7 @@ async function ensureDailyCache() {
       changed = true;
     } catch (err) {
       if (isQuotaError(err)) {
-        console.log("[CACHE] Rumor Gemini quota hit, using fallback rumors.");
+        console.log("[CACHE] Rumor generation error quota hit, using fallback rumors.");
         while (cache.rumors.length < rumorCount) {
           cache.rumors.push(...fallbackRumors);
         }
