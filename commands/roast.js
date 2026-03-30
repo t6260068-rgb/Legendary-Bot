@@ -12,13 +12,117 @@ const fs = require("fs");
 const path = require("path");
 
 const CONFIG_PATH = path.join(__dirname, "../data/roast-config.json");
+const USAGE_PATH = path.join(__dirname, "../data/roast-usage.json");
+
+const ROAST_COOLDOWN_MS = 30 * 1000; // 30 sec
+const ROAST_DAILY_LIMIT = 10;
+
+function ensureJsonFile(filePath, defaultValue) {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  if (!fs.existsSync(filePath)) {
+    fs.writeFileSync(filePath, JSON.stringify(defaultValue, null, 2));
+  }
+}
 
 function getConfig() {
+  ensureJsonFile(CONFIG_PATH, {});
   try {
     return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
   } catch {
     return {};
   }
+}
+
+function getUsage() {
+  ensureJsonFile(USAGE_PATH, {});
+  try {
+    return JSON.parse(fs.readFileSync(USAGE_PATH, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function saveUsage(data) {
+  ensureJsonFile(USAGE_PATH, {});
+  fs.writeFileSync(USAGE_PATH, JSON.stringify(data, null, 2));
+}
+
+function getTodayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getUserUsage(userId) {
+  const usage = getUsage();
+  const today = getTodayKey();
+
+  if (!usage[userId] || usage[userId].day !== today) {
+    usage[userId] = {
+      day: today,
+      count: 0,
+      lastUsedAt: 0,
+    };
+    saveUsage(usage);
+  }
+
+  return usage[userId];
+}
+
+function checkRoastAccess(userId) {
+  const usage = getUsage();
+  const today = getTodayKey();
+
+  if (!usage[userId] || usage[userId].day !== today) {
+    usage[userId] = {
+      day: today,
+      count: 0,
+      lastUsedAt: 0,
+    };
+    saveUsage(usage);
+  }
+
+  const userData = usage[userId];
+  const now = Date.now();
+
+  const remainingCooldown = ROAST_COOLDOWN_MS - (now - userData.lastUsedAt);
+  if (remainingCooldown > 0) {
+    return {
+      ok: false,
+      reason: "cooldown",
+      remainingMs: remainingCooldown,
+    };
+  }
+
+  if (userData.count >= ROAST_DAILY_LIMIT) {
+    return {
+      ok: false,
+      reason: "daily_limit",
+      remainingMs: 0,
+    };
+  }
+
+  return { ok: true };
+}
+
+function recordRoastUse(userId) {
+  const usage = getUsage();
+  const today = getTodayKey();
+
+  if (!usage[userId] || usage[userId].day !== today) {
+    usage[userId] = {
+      day: today,
+      count: 0,
+      lastUsedAt: 0,
+    };
+  }
+
+  usage[userId].count += 1;
+  usage[userId].lastUsedAt = Date.now();
+  saveUsage(usage);
+}
+
+function formatSeconds(ms) {
+  return Math.ceil(ms / 1000);
 }
 
 const ai = new GoogleGenAI({
@@ -187,6 +291,22 @@ function getRoastChannel(guildId) {
   return config[guildId]?.roastChannel || null;
 }
 
+function getBlockedMessage(userId) {
+  const check = checkRoastAccess(userId);
+
+  if (check.ok) return null;
+
+  if (check.reason === "cooldown") {
+    return `⏳ Chill bro, wait ${formatSeconds(check.remainingMs)}s before using roast again.`;
+  }
+
+  if (check.reason === "daily_limit") {
+    return `🚫 You reached your daily roast limit (${ROAST_DAILY_LIMIT}/day). Come back tomorrow.`;
+  }
+
+  return "❌ You can't use roast right now.";
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("roast")
@@ -204,10 +324,19 @@ module.exports = {
       });
     }
 
+    const blocked = getBlockedMessage(interaction.user.id);
+    if (blocked) {
+      return interaction.reply({
+        content: blocked,
+        ephemeral: true,
+      });
+    }
+
     const target = interaction.options.getUser("user");
     const targetName = target.globalName ?? target.username;
 
     await interaction.deferReply();
+    recordRoastUse(interaction.user.id);
 
     try {
       const roast = await generateRoast(targetName, "savage");
@@ -227,6 +356,11 @@ module.exports = {
       return message.reply(`❌ Roasts are only allowed in <#${roastChannel}>. Take it there! 🔥`);
     }
 
+    const blocked = getBlockedMessage(message.author.id);
+    if (blocked) {
+      return message.reply(blocked);
+    }
+
     const target = message.mentions.users.first();
     if (!target) {
       return message.reply("❌ You need to mention someone to roast! Usage: `$roast @user`");
@@ -235,6 +369,7 @@ module.exports = {
     const targetName = target.globalName ?? target.username;
 
     const reply = await message.reply("🔥 Cooking up a roast...");
+    recordRoastUse(message.author.id);
 
     try {
       const roast = await generateRoast(targetName, "savage");
@@ -252,4 +387,7 @@ module.exports = {
   buildRoastBackButton,
   buildRoastBackStyleButtons,
   buildRoastModal,
+  checkRoastAccess,
+  recordRoastUse,
+  getBlockedMessage,
 };
