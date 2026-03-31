@@ -4,7 +4,7 @@ const sportsLoopManager = require("../managers/sportsLoopManager");
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("setfootballchannel")
-    .setDescription("Set the football live score channel")
+    .setDescription("Set and lock the football live score channel")
     .addChannelOption((opt) =>
       opt
         .setName("channel")
@@ -18,11 +18,20 @@ module.exports = {
       return interaction.reply({ content: "❌ Admin only.", ephemeral: true });
     }
 
+    const settings = sportsLoopManager.getSettings(interaction.guildId, "football");
+    if (settings.locked && settings.channelId) {
+      return interaction.reply({
+        content: `⚠️ Football channel is already locked to <#${settings.channelId}>. Use /unlockfootballchannel first if you want to change it.`,
+        ephemeral: true,
+      });
+    }
+
     const channel = interaction.options.getChannel("channel");
     sportsLoopManager.setChannel(interaction.guildId, "football", channel.id);
+    sportsLoopManager.setLocked(interaction.guildId, "football", true);
     sportsLoopManager.refreshGuildLoops(interaction.guildId);
 
-    await interaction.reply(`✅ Football live score channel set to ${channel}`);
+    await interaction.reply(`✅ Football live score channel set and locked to ${channel}`);
   },
 
   async executePrefix(message) {
