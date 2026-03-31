@@ -8,17 +8,27 @@ module.exports = {
 
   async execute(interaction) {
     if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-      return interaction.reply({ content: "❌ Admin only.", ephemeral: true });
+      return interaction.reply({
+        content: "❌ Admin only.",
+        ephemeral: true,
+      });
     }
 
     await interaction.deferReply({ ephemeral: true });
 
     try {
       const result = await sportsLoopManager.postCricketLive(interaction.guildId, true);
-      await interaction.editReply(result.posted ? "✅ Posted cricket live scores." : `ℹ️ ${result.reason}`);
+
+      if (result.posted) {
+        await interaction.editReply("✅ Posted cricket live scores.");
+      } else {
+        await interaction.editReply(`ℹ️ ${result.reason}`);
+      }
     } catch (err) {
       console.error("cricketlive error:", err);
-      await interaction.editReply("❌ Couldn't fetch cricket live scores.");
+      await interaction.editReply(
+        `❌ Couldn't fetch cricket live scores.\n\`${err?.message || "Unknown error"}\``
+      );
     }
   },
 
