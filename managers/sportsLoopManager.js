@@ -100,7 +100,7 @@ async function fetchCricketLive() {
   const apiKey = process.env.CRICKET_API_KEY;
   if (!apiKey) throw new Error("CRICKET_API_KEY is missing");
 
-  const url = `https://api.cricketdata.org/v1/currentMatches?apikey=${encodeURIComponent(apiKey)}&offset=0`;
+  const url = `https://api.cricapi.com/v1/currentMatches?apikey=${encodeURIComponent(apiKey)}&offset=0`;
 
   for (let i = 0; i < 3; i++) {
     try {
@@ -108,12 +108,13 @@ async function fetchCricketLive() {
         method: "GET",
         headers: {
           "User-Agent": "Mozilla/5.0",
-          Accept: "application/json",
+          "Accept": "application/json",
         },
       });
 
       if (!res.ok) {
-        throw new Error(`Cricket API error: ${res.status}`);
+        const body = await res.text().catch(() => "");
+        throw new Error(`Cricket API error: ${res.status} ${body.slice(0, 200)}`);
       }
 
       const data = await res.json();
