@@ -4,7 +4,7 @@ const sportsLoopManager = require("../managers/sportsLoopManager");
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("footballlive")
-    .setDescription("Post current live football scores now"),
+    .setDescription("Update the football live scoreboard now"),
 
   async execute(interaction) {
     if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
@@ -15,10 +15,10 @@ module.exports = {
 
     try {
       const result = await sportsLoopManager.postFootballLive(interaction.guildId, true);
-      await interaction.editReply(result.posted ? "✅ Posted football live scores." : `ℹ️ ${result.reason}`);
+      await interaction.editReply(result.posted ? `✅ ${result.reason}` : `ℹ️ ${result.reason}`);
     } catch (err) {
       console.error("footballlive error:", err);
-      await interaction.editReply("❌ Couldn't fetch football live scores.");
+      await interaction.editReply(`❌ Couldn't fetch football live scores.\n\`${err?.message || "Unknown error"}\``);
     }
   },
 
