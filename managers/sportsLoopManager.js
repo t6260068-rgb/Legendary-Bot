@@ -101,14 +101,30 @@ async function fetchCricketLive() {
   if (!apiKey) throw new Error("CRICKET_API_KEY is missing");
 
   const url = `https://api.cricketdata.org/v1/currentMatches?apikey=${encodeURIComponent(apiKey)}&offset=0`;
-  const res = await fetch(url);
 
-  if (!res.ok) {
-    throw new Error(`Cricket API error: ${res.status}`);
+  for (let i = 0; i < 3; i++) {
+    try {
+      const res = await fetch(url, {
+        method: "GET",
+        headers: {
+          "User-Agent": "Mozilla/5.0",
+          Accept: "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error(`Cricket API error: ${res.status}`);
+      }
+
+      const data = await res.json();
+      return data.data || [];
+    } catch (err) {
+      console.log(`[CRICKET RETRY ${i + 1}]`, err.message);
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
   }
 
-  const data = await res.json();
-  return data.data || [];
+  throw new Error("Cricket API unreachable after retries");
 }
 
 function buildFootballEmbeds(matches) {
@@ -213,7 +229,14 @@ async function postFootballLive(guildId, manual = false) {
   if (!channel) return { posted: false, reason: "Football channel not found" };
 
   const matches = await fetchFootballLive();
-  const hash = makeHash(matches.map((m) => [m.fixture?.id, m.goals?.home, m.goals?.away, m.fixture?.status?.elapsed]));
+  const hash = makeHash(
+    matches.map((m) => [
+      m.fixture?.id,
+      m.goals?.home,
+      m.goals?.away,
+      m.fixture?.status?.elapsed,
+    ])
+  );
 
   if (!manual && settings.lastHash === hash) {
     return { posted: false, reason: "No football change" };
