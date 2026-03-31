@@ -31,24 +31,60 @@ function saveConfig(config) {
 
 function ensureGuildConfig(guildId) {
   const config = getConfig();
+
   if (!config[guildId]) {
     config[guildId] = {
       football: {
         channelId: null,
         auto: false,
         intervalMs: 300000,
+        locked: false,
         lastHash: "",
+        scoreboardMessageId: null,
+        lastGoalHash: "[]",
       },
       cricket: {
         channelId: null,
         auto: false,
         intervalMs: 300000,
+        locked: false,
         lastHash: "",
+        scoreboardMessageId: null,
       },
     };
     saveConfig(config);
   }
+
+  if (!config[guildId].football) {
+    config[guildId].football = {
+      channelId: null,
+      auto: false,
+      intervalMs: 300000,
+      locked: false,
+      lastHash: "",
+      scoreboardMessageId: null,
+      lastGoalHash: "[]",
+    };
+  }
+
+  if (!config[guildId].cricket) {
+    config[guildId].cricket = {
+      channelId: null,
+      auto: false,
+      intervalMs: 300000,
+      locked: false,
+      lastHash: "",
+      scoreboardMessageId: null,
+    };
+  }
+
+  saveConfig(config);
   return config;
+}
+
+function getSettings(guildId, sport) {
+  const config = ensureGuildConfig(guildId);
+  return config[guildId][sport];
 }
 
 function setChannel(guildId, sport, channelId) {
@@ -63,15 +99,28 @@ function setAuto(guildId, sport, enabled) {
   saveConfig(config);
 }
 
+function setLocked(guildId, sport, locked) {
+  const config = ensureGuildConfig(guildId);
+  config[guildId][sport].locked = locked;
+  saveConfig(config);
+}
+
+function setScoreboardMessageId(guildId, sport, messageId) {
+  const config = ensureGuildConfig(guildId);
+  config[guildId][sport].scoreboardMessageId = messageId;
+  saveConfig(config);
+}
+
 function setLastHash(guildId, sport, hash) {
   const config = ensureGuildConfig(guildId);
   config[guildId][sport].lastHash = hash;
   saveConfig(config);
 }
 
-function getSettings(guildId, sport) {
+function setLastGoalHash(guildId, hash) {
   const config = ensureGuildConfig(guildId);
-  return config[guildId][sport];
+  config[guildId].football.lastGoalHash = hash;
+  saveConfig(config);
 }
 
 function makeHash(data) {
@@ -89,7 +138,8 @@ async function fetchFootballLive() {
   });
 
   if (!res.ok) {
-    throw new Error(`Football API error: ${res.status}`);
+    const body = await res.text().catch(() => "");
+    throw new Error(`Football API error: ${res.status} ${body.slice(0, 200)}`);
   }
 
   const data = await res.json();
@@ -222,6 +272,80 @@ function buildCricketEmbeds(matches) {
   });
 }
 
+function extractGoalEvents(matches) {
+  const events = [];
+
+  for (const match of matches) {
+    const fixtureId = match.fixture?.id;
+    const home = match.teams?.home?.name || "Home";
+    const away = match.teams?.away?.name || "Away";
+    const homeGoals = match.goals?.home ?? 0;
+    const awayGoals = match.goals?.away ?? 0;
+
+    for (const e of match.events || []) {
+      if (e.type !== "Goal") continue;
+
+      const player = e.player?.name || "Unknown";
+      const team = e.team?.name || "Team";
+      const minute = e.time?.elapsed ?? "?";
+      const detail = e.detail || "Goal";
+
+      const signature = `${fixtureId}|${player}|${team}|${minute}|${detail}`;
+
+      events.push({
+        signature,
+        fixtureId,
+        player,
+        team,
+        minute,
+        detail,
+        home,
+        away,
+        scoreLine: `${homeGoals} - ${awayGoals}`,
+      });
+    }
+  }
+
+  return events;
+}
+
+function buildGoalAlertEmbed(goal) {
+  return new EmbedBuilder()
+    .setTitle("⚽ GOAL ALERT!")
+    .setDescription(`**${goal.home} vs ${goal.away}**`)
+    .addFields(
+      { name: "Scorer", value: goal.player, inline: true },
+      { name: "Team", value: goal.team, inline: true },
+      { name: "Minute", value: `${goal.minute}'`, inline: true },
+      { name: "Score", value: goal.scoreLine, inline: false },
+      { name: "Type", value: goal.detail, inline: false }
+    )
+    .setColor(0xe74c3c)
+    .setTimestamp();
+}
+
+async function getOrCreateScoreboardMessage(guildId, sport, channel, title, color) {
+  const settings = getSettings(guildId, sport);
+
+  if (settings.scoreboardMessageId) {
+    const existing = await channel.messages.fetch(settings.scoreboardMessageId).catch(() => null);
+    if (existing) return existing;
+  }
+
+  const starter = await channel.send({
+    embeds: [
+      new EmbedBuilder()
+        .setTitle(title)
+        .setDescription("Preparing live scoreboard...")
+        .setColor(color)
+        .setTimestamp(),
+    ],
+  });
+
+  setScoreboardMessageId(guildId, sport, starter.id);
+  return starter;
+}
+
 async function postFootballLive(guildId, manual = false) {
   const settings = getSettings(guildId, "football");
   if (!settings.channelId) return { posted: false, reason: "No football channel set" };
@@ -236,20 +360,48 @@ async function postFootballLive(guildId, manual = false) {
       m.goals?.home,
       m.goals?.away,
       m.fixture?.status?.elapsed,
+      m.fixture?.status?.short,
     ])
   );
 
-  if (!manual && settings.lastHash === hash) {
-    return { posted: false, reason: "No football change" };
-  }
+  const scoreboard = await getOrCreateScoreboardMessage(
+    guildId,
+    "football",
+    channel,
+    "⚽ Live Football Scores",
+    0x2ecc71
+  );
 
   const embeds = buildFootballEmbeds(matches);
-  for (const embed of embeds) {
-    await channel.send({ embeds: [embed] });
+  await scoreboard.edit({
+    content: `Last updated <t:${Math.floor(Date.now() / 1000)}:R>`,
+    embeds,
+  });
+
+  const currentGoals = extractGoalEvents(matches);
+  let previousGoalSignatures = [];
+
+  try {
+    previousGoalSignatures = JSON.parse(settings.lastGoalHash || "[]");
+  } catch {
+    previousGoalSignatures = [];
+  }
+
+  const newGoals = currentGoals.filter((g) => !previousGoalSignatures.includes(g.signature));
+
+  if (!manual && newGoals.length) {
+    for (const goal of newGoals.slice(0, 5)) {
+      await channel.send({ embeds: [buildGoalAlertEmbed(goal)] });
+    }
   }
 
   setLastHash(guildId, "football", hash);
-  return { posted: true };
+  setLastGoalHash(guildId, JSON.stringify(currentGoals.map((g) => g.signature)));
+
+  return {
+    posted: true,
+    reason: matches.length ? "Football scoreboard updated." : "No live football matches right now.",
+  };
 }
 
 async function postCricketLive(guildId, manual = false) {
@@ -262,17 +414,26 @@ async function postCricketLive(guildId, manual = false) {
   const matches = await fetchCricketLive();
   const hash = makeHash(matches.map((m) => [m.id, m.status, JSON.stringify(m.score || [])]));
 
-  if (!manual && settings.lastHash === hash) {
-    return { posted: false, reason: "No cricket change" };
-  }
+  const scoreboard = await getOrCreateScoreboardMessage(
+    guildId,
+    "cricket",
+    channel,
+    "🏏 Live Cricket Scores",
+    0xf39c12
+  );
 
   const embeds = buildCricketEmbeds(matches);
-  for (const embed of embeds) {
-    await channel.send({ embeds: [embed] });
-  }
+  await scoreboard.edit({
+    content: `Last updated <t:${Math.floor(Date.now() / 1000)}:R>`,
+    embeds,
+  });
 
   setLastHash(guildId, "cricket", hash);
-  return { posted: true };
+
+  return {
+    posted: true,
+    reason: matches.length ? "Cricket scoreboard updated." : "No live cricket matches right now.",
+  };
 }
 
 function stopLoop(guildId, sport) {
@@ -319,6 +480,7 @@ module.exports = {
   init,
   setChannel,
   setAuto,
+  setLocked,
   getSettings,
   refreshGuildLoops,
   postFootballLive,
