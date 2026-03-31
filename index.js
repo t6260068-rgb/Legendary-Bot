@@ -2,6 +2,7 @@ const { Client, GatewayIntentBits, Events, Collection, REST, Routes } = require(
 const fs = require("fs");
 const path = require("path");
 const loopManager = require("./managers/loopManager");
+const sportsLoopManager = require("./managers/sportsLoopManager");
 
 const PREFIX = "$";
 
@@ -32,6 +33,7 @@ for (const file of commandFiles) {
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`Logged in as ${readyClient.user.tag}`);
   await loopManager.init(client);
+  await sportsLoopManager.init(client);
 
   const rest = new REST().setToken(process.env.DISCORD_TOKEN);
   const commandData = [...client.commands.values()].map((cmd) => cmd.data.toJSON());
