@@ -4,7 +4,7 @@ const sportsLoopManager = require("../managers/sportsLoopManager");
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("cricketlive")
-    .setDescription("Post current live cricket scores now"),
+    .setDescription("Update the cricket live scoreboard now"),
 
   async execute(interaction) {
     if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
@@ -20,7 +20,7 @@ module.exports = {
       const result = await sportsLoopManager.postCricketLive(interaction.guildId, true);
 
       if (result.posted) {
-        await interaction.editReply("✅ Posted cricket live scores.");
+        await interaction.editReply(`✅ ${result.reason}`);
       } else {
         await interaction.editReply(`ℹ️ ${result.reason}`);
       }
