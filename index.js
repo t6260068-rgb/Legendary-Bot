@@ -3,6 +3,8 @@ const fs = require("fs");
 const path = require("path");
 const loopManager = require("./managers/loopManager");
 const sportsLoopManager = require("./managers/sportsLoopManager");
+const autoMessageManager = require("./managers/autoMessageManager");
+const predictionManager = require("./managers/predictionManager");
 
 const PREFIX = "$";
 
@@ -34,6 +36,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   console.log(`Logged in as ${readyClient.user.tag}`);
   await loopManager.init(client);
   await sportsLoopManager.init(client);
+  await autoMessageManager.init(client);
 
   const rest = new REST().setToken(process.env.DISCORD_TOKEN);
   const commandData = [...client.commands.values()].map((cmd) => cmd.data.toJSON());
@@ -98,6 +101,26 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
+    if (interaction.customId.startsWith("pred_vote_")) {
+      const optionIndex = Number(interaction.customId.replace("pred_vote_", ""));
+      const result = predictionManager.recordVote(interaction.guildId, interaction.user.id, optionIndex);
+
+      if (!result.ok) {
+        await interaction.reply({
+          content: `❌ ${result.reason}`,
+          ephemeral: true,
+        });
+        return;
+      }
+
+      await interaction.update({
+        embeds: [predictionManager.buildPredictionEmbed(result.prediction)],
+        components: predictionManager.buildPredictionButtons(true),
+      });
+
+      return;
+    }
+
     return;
   }
 
@@ -137,6 +160,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await interaction.editReply("❌ Couldn't cook up a comeback. Try again.");
       }
 
+      return;
+    }
+
+    if (interaction.customId.startsWith("auto_message_modal_")) {
+      const channelId = interaction.customId.replace("auto_message_modal_", "");
+      const cmd = require("./commands/setautomessage");
+      await cmd.handleModalSubmit(interaction, channelId);
       return;
     }
 
