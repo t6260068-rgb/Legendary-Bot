@@ -14,7 +14,7 @@ const PUBLIC_COMMANDS = [
       { name: "$trivia  /trivia", desc: "Get a random trivia question with a hidden answer" },
       { name: "$choose opt1, opt2  /choose", desc: "Let the bot pick — e.g. `$choose Pizza, Burger, Sushi`" },
       { name: "$reverse text  /reverse", desc: "Reverse any text — e.g. `$reverse Hello World`" },
-      { name: "$roast [@user]  /roast", desc: "AI-roasts a user savagely 🔥 — click Roast Back to fight back" },
+      { name: "$roast [@user]  /roast", desc: "AI-roasts a user with randomized styles 🔥 — click Roast Back to fight back" },
     ],
   },
   {
@@ -59,6 +59,34 @@ const STAFF_COMMANDS = [
       { name: "$unban userID [reason]  /unban", desc: "Unban a user by their Discord ID" },
       { name: "$clear amount  /clear", desc: "Bulk delete messages — e.g. `$clear 10`" },
       { name: "$dm @user message  /dm", desc: "Send a private DM to a user" },
+    ],
+  },
+  {
+    category: "⚽🏏 Sports Admin",
+    list: [
+      { name: "$setfootballchannel #channel  /setfootballchannel", desc: "Set and lock the football live score channel" },
+      { name: "$setcricketchannel #channel  /setcricketchannel", desc: "Set and lock the cricket live score channel" },
+      { name: "$unlockfootballchannel  /unlockfootballchannel", desc: "Unlock football channel so you can change it again" },
+      { name: "$unlockcricketchannel  /unlockcricketchannel", desc: "Unlock cricket channel so you can change it again" },
+      { name: "$footballlive  /footballlive", desc: "Update the football live scoreboard now" },
+      { name: "$cricketlive  /cricketlive", desc: "Update the cricket live scoreboard now" },
+      { name: "$footballauto on/off  /footballauto", desc: "Turn football auto live updates on or off" },
+      { name: "$cricketauto on/off  /cricketauto", desc: "Turn cricket auto live updates on or off" },
+    ],
+  },
+  {
+    category: "📨 Auto Message Admin",
+    list: [
+      { name: "$setautomessage  /setautomessage", desc: "Set a message that auto-sends every 12 hours in a chosen channel" },
+      { name: "$stopautomessage  /stopautomessage", desc: "Stop the 12-hour auto message system" },
+    ],
+  },
+  {
+    category: "💰 Prediction Admin",
+    list: [
+      { name: "$startprediction  /startprediction", desc: "Start a prediction with 2 options and fake points" },
+      { name: "$closeprediction  /closeprediction", desc: "Close the active prediction and award points to winners" },
+      { name: "$predictionleaderboard  /predictionleaderboard", desc: "Show the top prediction points leaderboard" },
     ],
   },
 ];
