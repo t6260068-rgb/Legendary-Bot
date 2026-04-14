@@ -1,6 +1,8 @@
 const { Client, GatewayIntentBits, Events, Collection, REST, Routes } = require("discord.js");
 const fs = require("fs");
 const path = require("path");
+
+const connectMongo = require("./database/mongo");
 const loopManager = require("./managers/loopManager");
 const sportsLoopManager = require("./managers/sportsLoopManager");
 const autoMessageManager = require("./managers/autoMessageManager");
@@ -34,6 +36,8 @@ for (const file of commandFiles) {
 
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`Logged in as ${readyClient.user.tag}`);
+
+  await connectMongo();
   await loopManager.init(client);
   await sportsLoopManager.init(client);
   await autoMessageManager.init(client);
