@@ -37,10 +37,18 @@ for (const file of commandFiles) {
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`Logged in as ${readyClient.user.tag}`);
 
-  await connectMongo();
-  await loopManager.init(client);
-  await sportsLoopManager.init(client);
-  await autoMessageManager.init(client);
+console.log("🚀 Starting Mongo connection...");
+await connectMongo();
+console.log("✅ Mongo step finished.");
+
+console.log("🚀 Starting loopManager...");
+await loopManager.init(client);
+
+console.log("🚀 Starting sportsLoopManager...");
+await sportsLoopManager.init(client);
+
+console.log("🚀 Starting autoMessageManager...");
+await autoMessageManager.init(client);
 
   const rest = new REST().setToken(process.env.DISCORD_TOKEN);
   const commandData = [...client.commands.values()].map((cmd) => cmd.data.toJSON());
